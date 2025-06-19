@@ -36,16 +36,50 @@
             padding: 10px;
             background-color: #f0f0f0;
         }
+
+        .control-group {
+            margin: 15px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+
+        label {
+            display: inline-block;
+            width: 120px;
+            margin-right: 10px;
+        }
+
+        select, input[type="range"] {
+            padding: 5px;
+            margin: 5px 0;
+        }
     </style>
 </head>
 <body>
     <h1>音乐遥控器</h1>
 
-    <div>
-        <button id="playBtn">播放</button>
-        <button id="pauseBtn">暂停</button>
-        <button id="stopBtn">停止</button>
-        <button id="refreshBtn">刷新列表</button>
+    <div class="control-group">
+        <div>
+            <button id="playBtn">播放</button>
+            <button id="pauseBtn">暂停</button>
+            <button id="stopBtn">停止</button>
+            <button id="refreshBtn">刷新列表</button>
+        </div>
+    </div>
+
+    <div class="control-group">
+        <div>
+            <label for="audioDevice">音频设备:</label>
+            <select id="audioDevice">
+                <option value="default">默认设备</option>
+            </select>
+        </div>
+        <div>
+            <label for="volumeControl">音量:</label>
+            <input type="range" id="volumeControl" min="0" max="100" value="50">
+            <span id="volumeValue">50%</span>
+        </div>
     </div>
 
     <h2>歌曲列表</h2>
@@ -55,18 +89,25 @@
 
     <script>
         // 获取服务器IP和端口
-        const serverUrl = `http://10.98.25.119:8080`;
+        const serverUrl = `http://${window.location.hostname}:8080`;
         let selectedSong = null;
 
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             loadSongList();
+            loadAudioDevices();
 
             document.getElementById('playBtn').addEventListener('click', playSong);
             document.getElementById('pauseBtn').addEventListener('click', pauseSong);
             document.getElementById('stopBtn').addEventListener('click', stopSong);
             document.getElementById('refreshBtn').addEventListener('click', loadSongList);
 
-            document.getElementById('songList').addEventListener('click', function(e) {
+            document.getElementById('volumeControl').addEventListener('input', function () {
+                const volume = this.value;
+                document.getElementById('volumeValue').textContent = volume + '%';
+                setVolume(volume);
+            });
+
+            document.getElementById('songList').addEventListener('click', function (e) {
                 if (e.target.tagName === 'LI') {
                     // 移除之前选中的样式
                     const items = document.querySelectorAll('#songList li');
@@ -78,6 +119,63 @@
                 }
             });
         });
+
+        function loadAudioDevices() {
+            fetch(`${serverUrl}/devices`)
+                .then(response => response.json())
+                .then(devices => {
+                    const deviceSelect = document.getElementById('audioDevice');
+                    deviceSelect.innerHTML = '';
+
+                    devices.forEach(device => {
+                        const option = document.createElement('option');
+                        option.value = device.id;
+                        option.textContent = device.name;
+                        deviceSelect.appendChild(option);
+                    });
+
+                    deviceSelect.addEventListener('change', function () {
+                        setAudioDevice(this.value);
+                    });
+                })
+                .catch(err => {
+                    console.error('无法获取音频设备列表:', err);
+                });
+        }
+
+        function setAudioDevice(deviceId) {
+            fetch(`${serverUrl}/setdevice`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ deviceId: deviceId })
+            })
+                .then(response => response.text())
+                .then(msg => {
+                    updateStatus(msg);
+                })
+                .catch(err => {
+                    updateStatus('设置音频设备失败: ' + err.message);
+                });
+        }
+
+        function setVolume(volume) {
+            fetch(`${serverUrl}/volume`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ volume: volume })
+            })
+                .then(response => response.text())
+                .then(msg => {
+                    updateStatus(msg);
+                })
+                .catch(err => {
+                    updateStatus('设置音量失败: ' + err.message);
+                });
+        }
 
         function loadSongList() {
             fetch(`${serverUrl}/list`)
@@ -111,13 +209,13 @@
                 method: 'POST',
                 body: selectedSong
             })
-            .then(response => response.text())
-            .then(msg => {
-                updateStatus(msg);
-            })
-            .catch(err => {
-                updateStatus('播放失败: ' + err.message);
-            });
+                .then(response => response.text())
+                .then(msg => {
+                    updateStatus(msg);
+                })
+                .catch(err => {
+                    updateStatus('播放失败: ' + err.message);
+                });
         }
 
         function pauseSong() {

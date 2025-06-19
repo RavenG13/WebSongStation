@@ -1,11 +1,8 @@
-﻿using NAudio.Wave;
-using System;
-using System.Collections.Generic;
-using System.IO;
+﻿using NAudio.CoreAudioApi;
+using NAudio.Wave;
 using System.Net;
-using System.Threading;
+using System.Text.Json;
 
-// 简化版HTTP服务器
 public class SimpleHttpServer
 {
     private HttpListener _listener;
@@ -14,17 +11,19 @@ public class SimpleHttpServer
     private AudioFileReader _audioFile;
     private string _currentSong;
     private List<string> _musicLibrary = new List<string>();
+    private float _volume = 0.5f;
+    private int _selectedDevice = -1; // -1 表示默认设备
 
     public SimpleHttpServer(int port)
     {
         _listener = new HttpListener();
         _listener.Prefixes.Add($"http://*:8080/");
         ScanMusicLibrary();
+    
     }
 
     private void ScanMusicLibrary()
     {
-        // 扫描音乐文件夹，这里假设放在程序目录下的Music文件夹
         string musicPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "music");
         if (Directory.Exists(musicPath))
         {
@@ -44,7 +43,7 @@ public class SimpleHttpServer
                 try
                 {
                     var context = _listener.GetContext();
-                    Console.WriteLine("connect");
+                    Console.WriteLine(context.ToString());
                     ProcessRequest(context);
                 }
                 catch (Exception ex)
@@ -54,6 +53,7 @@ public class SimpleHttpServer
             }
         });
     }
+
     private void ServeFile(HttpListenerResponse response, string filePath, string contentType)
     {
         if (File.Exists(filePath))
@@ -74,18 +74,17 @@ public class SimpleHttpServer
         var request = context.Request;
         var response = context.Response;
 
-
         try
         {
             string path = request.Url.LocalPath.ToLower();
             string method = request.HttpMethod;
-            // 添加静态文件服务
+
             if (path == "/" || path == "/index.html")
             {
                 ServeFile(response, "./wwwroot/index.html", "text/html");
                 return;
             }
-            if (path == "/play" && method == "POST")
+            else if (path == "/play" && method == "POST")
             {
                 using (var reader = new StreamReader(request.InputStream))
                 {
@@ -114,6 +113,53 @@ public class SimpleHttpServer
                 string songs = string.Join("\n", _musicLibrary);
                 WriteResponse(response, songs);
             }
+            else if (path == "/devices" && method == "GET")
+            {
+                var enumerator = new MMDeviceEnumerator();
+                var audioEndPoints = enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active);
+                
+                var i = audioEndPoints.Count;
+                var devices = Enumerable.Range(-1, i)
+                    .Select(i => new
+                    {
+                        id = i,
+                        name = i == -1 ? "默认设备" : audioEndPoints[i].FriendlyName
+                    });
+
+                var json = JsonSerializer.Serialize(devices);
+                WriteResponse(response, json, contentType: "application/json");
+            }
+            else if (path == "/setdevice" && method == "POST")
+            {
+                using (var reader = new StreamReader(request.InputStream))
+                {
+                    var json = reader.ReadToEnd();
+                    var data = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+                    _selectedDevice = int.Parse(data["deviceId"]);  // 手动转换为 int
+
+                    StopPlayback();
+
+                    WriteResponse(response, $"音频设备已切换到: {_selectedDevice}");
+                }
+            }
+            else if (path == "/volume" && method == "POST")
+            {
+                using (var reader = new StreamReader(request.InputStream))
+                {
+                    var json = reader.ReadToEnd();
+                    //var data = JsonSerializer.Deserialize<Dictionary<string, int>>(json);
+                    var data = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+                    _volume = float.Parse(data["volume"])/100.0f;  // 手动转换为 int
+                    //_volume = data["volume"] / 100.0f;
+
+                    if (_audioFile != null)
+                    {
+                        _audioFile.Volume = _volume;
+                    }
+
+                    WriteResponse(response, $"音量已设置为: {data["volume"]}%");
+                }
+            }
             else
             {
                 WriteResponse(response, "Invalid command", 404);
@@ -131,12 +177,25 @@ public class SimpleHttpServer
 
     private void PlaySong(string songPath)
     {
-        StopPlayback(); // 停止当前播放
-
+        StopPlayback();
+        _waveOut = null;
         if (File.Exists(songPath))
         {
             _audioFile = new AudioFileReader(songPath);
-            _waveOut = new WaveOutEvent();
+            _audioFile.Volume = _volume;
+
+            var enumerator = new MMDeviceEnumerator();
+            var audioEndPoints = enumerator.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active);
+
+            if (_selectedDevice == -1)
+            {
+                _waveOut = new WasapiOut();
+            }
+            else
+            {
+                _waveOut = new WasapiOut(device: audioEndPoints[_selectedDevice], AudioClientShareMode.Shared, false, 100);
+            }
+            
             _waveOut.Init(_audioFile);
             _waveOut.Play();
             _currentSong = songPath;
@@ -161,9 +220,10 @@ public class SimpleHttpServer
         _waveOut?.Play();
     }
 
-    private void WriteResponse(HttpListenerResponse response, string message, int statusCode = 200)
+    private void WriteResponse(HttpListenerResponse response, string message, int statusCode = 200, string contentType = "text/plain")
     {
         response.StatusCode = statusCode;
+        response.ContentType = contentType;
         byte[] buffer = System.Text.Encoding.UTF8.GetBytes(message);
         response.ContentLength64 = buffer.Length;
         response.OutputStream.Write(buffer, 0, buffer.Length);
@@ -177,12 +237,11 @@ public class SimpleHttpServer
     }
 }
 
-// 主程序
 class Program
 {
     static void Main(string[] args)
     {
-        int port = 1000; // 可根据需要修改端口
+        int port = 1000;
         var server = new SimpleHttpServer(port);
 
         Console.WriteLine($"Starting server on port {port}");
