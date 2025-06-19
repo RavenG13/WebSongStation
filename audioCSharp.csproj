@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="music\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="bin\Debug\net8.0\music\GJ.centroid - Cool &amp; Powerful.mp3" />
+    <None Include="bin\Debug\net8.0\music\塞壬唱片-MSR,Adam Gubman,Matilda Stray - Before Summer.mp3" />
+    <None Include="bin\Debug\net8.0\music\塞壬唱片-MSR,BaoUner - 生命流.mp3" />
+    <None Include="bin\Debug\net8.0\music\塞壬唱片-MSR,Erik Castro,David Lin - Stained.mp3" />
+    <None Include="bin\Debug\net8.0\music\塞壬唱片-MSR,Low Roar - Feels.mp3" />
+    <None Include="bin\Debug\net8.0\music\塞壬唱片-MSR,Obadiah Brown-Beach,Cristina Vee - Spark for Dream.mp3" />
+    <None Include="bin\Debug\net8.0\wwwroot\index.html">
+      <SubType>Component</SubType>
+    </None>
+  </ItemGroup>
+
+</Project>

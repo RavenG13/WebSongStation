@@ -1,0 +1,150 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>音乐遥控器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        button {
+            padding: 10px 15px;
+            margin: 5px;
+            font-size: 16px;
+        }
+
+        #songList {
+            list-style: none;
+            padding: 0;
+        }
+
+            #songList li {
+                padding: 8px;
+                border-bottom: 1px solid #eee;
+                cursor: pointer;
+            }
+
+                #songList li:hover {
+                    background-color: #f5f5f5;
+                }
+
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h1>音乐遥控器</h1>
+
+    <div>
+        <button id="playBtn">播放</button>
+        <button id="pauseBtn">暂停</button>
+        <button id="stopBtn">停止</button>
+        <button id="refreshBtn">刷新列表</button>
+    </div>
+
+    <h2>歌曲列表</h2>
+    <ul id="songList"></ul>
+
+    <div id="status">未连接</div>
+
+    <script>
+        // 获取服务器IP和端口
+        const serverUrl = `http://10.98.25.119:8080`;
+        let selectedSong = null;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSongList();
+
+            document.getElementById('playBtn').addEventListener('click', playSong);
+            document.getElementById('pauseBtn').addEventListener('click', pauseSong);
+            document.getElementById('stopBtn').addEventListener('click', stopSong);
+            document.getElementById('refreshBtn').addEventListener('click', loadSongList);
+
+            document.getElementById('songList').addEventListener('click', function(e) {
+                if (e.target.tagName === 'LI') {
+                    // 移除之前选中的样式
+                    const items = document.querySelectorAll('#songList li');
+                    items.forEach(item => item.style.backgroundColor = '');
+
+                    // 设置当前选中样式
+                    e.target.style.backgroundColor = '#ddf';
+                    selectedSong = e.target.textContent;
+                }
+            });
+        });
+
+        function loadSongList() {
+            fetch(`${serverUrl}/list`)
+                .then(response => response.text())
+                .then(songs => {
+                    const songList = document.getElementById('songList');
+                    songList.innerHTML = '';
+
+                    songs.split('\n').forEach(song => {
+                        if (song.trim()) {
+                            const li = document.createElement('li');
+                            li.textContent = song;
+                            songList.appendChild(li);
+                        }
+                    });
+
+                    updateStatus('歌曲列表已加载');
+                })
+                .catch(err => {
+                    updateStatus('无法获取歌曲列表: ' + err.message);
+                });
+        }
+
+        function playSong() {
+            if (!selectedSong) {
+                updateStatus('请先选择一首歌曲');
+                return;
+            }
+
+            fetch(`${serverUrl}/play`, {
+                method: 'POST',
+                body: selectedSong
+            })
+            .then(response => response.text())
+            .then(msg => {
+                updateStatus(msg);
+            })
+            .catch(err => {
+                updateStatus('播放失败: ' + err.message);
+            });
+        }
+
+        function pauseSong() {
+            fetch(`${serverUrl}/pause`)
+                .then(response => response.text())
+                .then(msg => {
+                    updateStatus(msg);
+                })
+                .catch(err => {
+                    updateStatus('暂停失败: ' + err.message);
+                });
+        }
+
+        function stopSong() {
+            fetch(`${serverUrl}/stop`)
+                .then(response => response.text())
+                .then(msg => {
+                    updateStatus(msg);
+                })
+                .catch(err => {
+                    updateStatus('停止失败: ' + err.message);
+                });
+        }
+
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+    </script>
+</body>
+</html>
